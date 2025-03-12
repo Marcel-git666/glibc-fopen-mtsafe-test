@@ -11,3 +11,4 @@ March 12, 2025
 - Adding errno checking
 - I would use xpthread_create if developing for glibc directly
 - I found https://github.com/bminor/glibc/blob/master/iconv/tst-iconv-mt.c that looks much easier than my test, so I might simplify it too.
+- Half code removed, simplification might be the key
