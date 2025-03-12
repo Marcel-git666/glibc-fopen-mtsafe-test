@@ -47,9 +47,9 @@ test_basic_mtsafety (struct thread_data *data)
       /* Write Thread ID to file */
       if (fprintf (file, "%d", data->thread_id) < 0)
         {
-        printf ("Thread %d: Error writing to file: %s\n",
-          data->thread_id, strerror (errno));
-        data->error_count++;
+          printf ("Thread %d: Error writing to file: %s\n",
+            data->thread_id, strerror (errno));
+          data->error_count++;
         }
       else
         {
