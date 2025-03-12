@@ -13,7 +13,7 @@
 #endif
 
 #define NUM_FILES 4
-#define NUM_THREADS 16
+#define NUM_THREADS 500
 #define NUM_OPERATIONS 10
 #define FILENAME_MAXLEN 100
 
@@ -24,6 +24,7 @@ struct thread_data
   char filename[100];
   int success_count;
   int expected_error_count;
+  int possible_fatal_error_count;
 };
 
 static pthread_barrier_t barrier;
@@ -183,7 +184,7 @@ test_basic_mtsafety (struct thread_data *data)
     {
       printf ("Error: Thread %d: Failed to create test file %s\n",
              data->thread_id, unique_filename);
-      data->expected_error_count++;
+      data->possible_fatal_error_count++;
     }
 }
 
@@ -346,6 +347,7 @@ create_and_run_threads (pthread_t *threads, struct thread_data *thread_data,
       strcpy (thread_data[i].filename, filenames[i % NUM_FILES]);
       thread_data[i].success_count = 0;
       thread_data[i].expected_error_count = 0;
+      thread_data[i].possible_fatal_error_count = 0;
 
       ret = pthread_create (&threads[i], NULL, thread_function, &thread_data[i]);
       if (ret != 0)
@@ -385,17 +387,19 @@ report_results (const struct thread_data *thread_data)
   int i;
   int total_success = 0;
   int total_expected_errors = 0;
+  int total_fatal_errors = 0;
 
   for (i = 0; i < NUM_THREADS; i++)
     {
       total_success += thread_data[i].success_count;
       total_expected_errors += thread_data[i].expected_error_count;
+      total_fatal_errors += thread_data[i].possible_fatal_error_count;
     }
 
-  printf ("Total operations: %d, Expected errors: %d\n",
-          total_success + total_expected_errors, total_expected_errors);
+  printf ("Total operations: %d, Expected errors: %d, Fatal(?) errors: %d\n",
+          total_success + total_expected_errors, total_expected_errors, total_fatal_errors);
 
-  return 1;
+  return (total_fatal_errors ? 0 : 1);
 }
 
 static int
