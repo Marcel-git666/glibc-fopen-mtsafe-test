@@ -2,3 +2,6 @@ March 11, 2025:
 - Set up development environment with Fedora
 - Read through glibc testing documentation
 - Created initial test structure
+
+March 12, 2025
+- Implemented file operations in each thread

@@ -14,7 +14,7 @@
 
 #define NUM_FILES 4
 #define NUM_THREADS 16
-
+#define NUM_OPERATIONS 100
 /* Struct for data and threads */
 struct thread_data
 {
@@ -22,8 +22,9 @@ struct thread_data
   char filename[100];
   int success_count;
   int error_count;
-  pthread_barrier_t *barrier;
 };
+
+static pthread_barrier_t barrier;
 
 /* Create test files */
 static void
@@ -53,10 +54,17 @@ create_test_files (char filenames[][100])
 static void
 cleanup_test_files (char filenames[][100])
 {
-  printf ("Cleaning up test files\n");
+  FILE *file;
 
+  printf ("Cleaning up test files\n");
+  printf ("----------------------\n");
   for (int i = 0; i < NUM_FILES; i++)
     {
+      file = fopen(filenames[i], "r");
+      char buffer[128];
+      if (fgets (buffer, sizeof(buffer), file) != NULL)
+        printf("%s\n", buffer);
+      fclose (file);
       if (unlink (filenames[i]) == 0)
         {
           printf ("Removed file %s\n", filenames[i]);
@@ -69,12 +77,42 @@ static void *
 thread_function (void *arg)
 {
   struct thread_data *data = (struct thread_data *) arg;
+  FILE *file;
 
-  pthread_barrier_wait (data->barrier);
-  printf ("Thread %d starting\n", data->thread_id);
+  pthread_barrier_wait (&barrier);
+  printf ("Thread %d starting with file %s\n", data->thread_id, data->filename);
+  for (int i = 0; i < NUM_OPERATIONS; i++) {
+    const char *modes[] = {"r", "r+", "w", "w+", "a", "a+"};
+    const char *mode = modes[i % 6];
+    file = fopen (data->filename, mode);
+    if (file == NULL)
+      {
+          printf ("Thread %d: Error opening file %s with mode %s: %s\n",
+                  data->thread_id, data->filename, mode, strerror (errno));
+          data->error_count++;
+          continue;
+      }
+      if (strchr(mode, 'r')) // If reading is allowed
+      {
+        char buffer[128];
+        if (fgets (buffer, sizeof(buffer), file) != NULL)
+          {
+            // Successfully read data
+            data->success_count++;
+          }
+      }
 
-  /* Implementace testovací logiky */
-  /* ... */
+    if (strchr(mode, 'w') || strchr(mode, 'a')) // If writing is allowed
+      {
+        if (fprintf (file, "Thread %d iteration %d\n", data->thread_id, i) > 0)
+          {
+            // Successfully wrote data
+            data->success_count++;
+          }
+      }
+
+    fclose (file);
+  }
 
   printf ("Thread %d finished\n", data->thread_id);
   return NULL;
@@ -87,10 +125,9 @@ do_test (void)
   struct thread_data thread_data[NUM_THREADS];
   int ret;
   char test_filenames[NUM_FILES][100];
-  pthread_barrier_t start_barrier;
 
   // Initialize the barrier
-  pthread_barrier_init (&start_barrier, NULL, NUM_THREADS);
+  pthread_barrier_init (&barrier, NULL, NUM_THREADS);
   printf ("Test starting with %d threads\n", NUM_THREADS);
  /* Initialize the file names */
   for (int i = 0; i < NUM_FILES; i++)
@@ -142,6 +179,7 @@ do_test (void)
   printf ("Total operations: %d, Errors: %d\n",
           total_success + total_errors, total_errors);
 
+  pthread_barrier_destroy (&barrier);
   return (total_errors == 0) ? 0 : 1; /* 0 means success */
 }
 
