@@ -13,8 +13,8 @@
 #endif
 
 #define NUM_FILES 4
-#define NUM_THREADS 16
-#define NUM_OPERATIONS 100
+#define NUM_THREADS 64
+#define NUM_OPERATIONS 20
 /* Struct for data and threads */
 struct thread_data
 {
@@ -62,8 +62,9 @@ cleanup_test_files (char filenames[][100])
     {
       file = fopen(filenames[i], "r");
       char buffer[128];
-      if (fgets (buffer, sizeof(buffer), file) != NULL)
-        printf("%s\n", buffer);
+      while (fgets (buffer, sizeof(buffer), file) != NULL)
+        printf("%s", buffer);
+      printf("\n");
       fclose (file);
       if (unlink (filenames[i]) == 0)
         {
@@ -78,13 +79,29 @@ thread_function (void *arg)
 {
   struct thread_data *data = (struct thread_data *) arg;
   FILE *file;
+  char buffer[128];
 
   pthread_barrier_wait (&barrier);
   printf ("Thread %d starting with file %s\n", data->thread_id, data->filename);
   for (int i = 0; i < NUM_OPERATIONS; i++) {
-    const char *modes[] = {"r", "r+", "w", "w+", "a", "a+"};
-    const char *mode = modes[i % 6];
+    int mode_choice = rand() % 6;
+    const char *mode;
+
+    switch (mode_choice) {
+      case 0: mode = "r"; break;   /* Read only */
+      case 1: mode = "r+"; break;  /* Read and write, must exist */
+      case 2: mode = "w"; break;   /* Write only, truncate/create */
+      case 3: mode = "w+"; break;  /* Read and write, truncate/create */
+      case 4: mode = "a"; break;   /* Append only, create if needed */
+      case 5: mode = "a+"; break;  /* Read and append, create if needed */
+      default: mode = "r"; break;
+    }
+    usleep(rand() % 50000);
+    printf("Thread %d trying to open %s in mode '%s' (iteration %d)\n",
+             data->thread_id, data->filename, mode, i);
+
     file = fopen (data->filename, mode);
+
     if (file == NULL)
       {
           printf ("Thread %d: Error opening file %s with mode %s: %s\n",
@@ -92,26 +109,53 @@ thread_function (void *arg)
           data->error_count++;
           continue;
       }
-      if (strchr(mode, 'r')) // If reading is allowed
+    printf("Thread %d successfully opened %s in mode '%s'\n",
+      data->thread_id, data->filename, mode);
+    /* Sleep shortly after opening to increase race chances */
+    usleep(rand() % 10000);
+    if (strchr(mode, 'r') || strchr(mode, '+')) // If reading is allowed
       {
-        char buffer[128];
-        if (fgets (buffer, sizeof(buffer), file) != NULL)
-          {
-            // Successfully read data
-            data->success_count++;
-          }
-      }
+      /* For append mode, we need to rewind to read from the beginning */
+      if (strchr(mode, 'a')) {
+          rewind(file);
+        }
 
-    if (strchr(mode, 'w') || strchr(mode, 'a')) // If writing is allowed
-      {
-        if (fprintf (file, "Thread %d iteration %d\n", data->thread_id, i) > 0)
-          {
-            // Successfully wrote data
+      if (fgets(buffer, sizeof(buffer), file) != NULL) {
+            printf("Thread %d read: %s", data->thread_id, buffer);
             data->success_count++;
+          } else {
+            printf("Thread %d could not read from file\n", data->thread_id);
           }
-      }
+        }
 
+        if (strchr(mode, 'w') || strchr(mode, 'a') || strchr(mode, '+')) /* Mode allows writing */
+        {
+          /* For write modes that truncate, add initial content back */
+          if (strchr(mode, 'w')) {
+            fprintf(file, "File rebuilt by Thread %d\n", data->thread_id);
+          }
+
+          /* For append mode or '+' mode, position at end */
+          if (strchr(mode, 'a') || (strchr(mode, '+') && !strchr(mode, 'w'))) {
+            fseek(file, 0, SEEK_END);
+          }
+
+          /* Write a marker */
+          int result = fprintf(file, "Thread %d was here (operation %d)\n",
+                               data->thread_id, i);
+
+          if (result > 0) {
+            printf("Thread %d wrote to file\n", data->thread_id);
+            data->success_count++;
+          } else {
+            printf("Thread %d failed to write to file\n", data->thread_id);
+          }
+        }
+    /* Flush changes to disk */
+    fflush(file);
     fclose (file);
+    printf("Thread %d closed file %s\n", data->thread_id, data->filename);
+    usleep(rand() % 70000);
   }
 
   printf ("Thread %d finished\n", data->thread_id);
