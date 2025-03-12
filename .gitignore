@@ -1,3 +1,6 @@
+# Main executable
+tst-fopen-mtsafe
+
 # Mac hidden file
 .DS_Store
 # Text files

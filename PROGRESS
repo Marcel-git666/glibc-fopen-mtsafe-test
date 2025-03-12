@@ -5,3 +5,6 @@ March 11, 2025:
 
 March 12, 2025
 - Implemented file operations in each thread
+- Refactor code to use more functions
+- Improved error handling
+

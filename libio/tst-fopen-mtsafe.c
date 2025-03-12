@@ -115,6 +115,78 @@ cleanup_test_files (char filenames[][FILENAME_MAXLEN])
     }
 }
 
+/* Test basic MT-Safety fopen() */
+static void
+test_basic_mtsafety (struct thread_data *data)
+{
+  char unique_filename[FILENAME_MAXLEN];
+  FILE *file;
+
+  /* Each thread creates its unique file */
+  snprintf (unique_filename, FILENAME_MAXLEN, "mtsafe_thread_%d.txt",
+           data->thread_id);
+
+  printf ("Thread %d testing basic MT-Safety with file %s\n",
+         data->thread_id, unique_filename);
+
+  /* 1st Test: File creation */
+  file = fopen (unique_filename, "w");
+  if (file != NULL)
+    {
+      /* Write Thread ID to file */
+      fprintf (file, "%d", data->thread_id);
+      fclose (file);
+      data->success_count++;
+
+      /* 2nd Test: Open nonexistent file (test errno) */
+      char nonexistent_filename[FILENAME_MAXLEN];
+      snprintf (nonexistent_filename, FILENAME_MAXLEN,
+               "nonexistent_file_%d.xyz", data->thread_id);
+
+      FILE *nonexistent = fopen (nonexistent_filename, "r");
+      if (nonexistent == NULL)
+        {
+          /* Store errno just after call */
+          int my_errno = errno;
+          /* Check whether errno is set to ENOENT */
+          if (my_errno == ENOENT)
+            {
+              printf ("Thread %d: errno correctly set to ENOENT\n", data->thread_id);
+              data->success_count++;
+            }
+        }
+      else
+        {
+          /* This shouldn't happen, but still we can clean */
+          printf("Unknown error!!!!");
+          fclose (nonexistent);
+          unlink (nonexistent_filename);
+        }
+
+      /* 3rd Test: Open its own file again */
+      file = fopen (unique_filename, "r");
+      if (file != NULL)
+        {
+          int stored_id;
+          if (fscanf (file, "%d", &stored_id) == 1 && stored_id == data->thread_id)
+            {
+              printf ("Thread %d: Successfully verified file content\n", data->thread_id);
+              data->success_count++;
+            }
+          fclose (file);
+        }
+
+      /* Delete test file */
+      unlink (unique_filename);
+    }
+  else
+    {
+      printf ("Error: Thread %d: Failed to create test file %s\n",
+             data->thread_id, unique_filename);
+      data->expected_error_count++;
+    }
+}
+
 /* Perform reading operation if mode allows */
 static void
 perform_read_operation (FILE *file, const char *mode, struct thread_data *data)
@@ -187,6 +259,7 @@ thread_function (void *arg)
   pthread_barrier_wait (&barrier);
   printf ("Thread %d starting with file %s\n", data->thread_id, data->filename);
 
+  test_basic_mtsafety(data);
   for (i = 0; i < NUM_OPERATIONS; i++)
     {
       /* Select random file opening mode */
@@ -322,7 +395,7 @@ report_results (const struct thread_data *thread_data)
   printf ("Total operations: %d, Expected errors: %d\n",
           total_success + total_expected_errors, total_expected_errors);
 
-  return 0;
+  return 1;
 }
 
 static int
@@ -362,6 +435,7 @@ do_test (void)
 
   /* Check and report results */
   success = report_results (thread_data);
+  printf("Success report_result: %d\n", success);
 
 cleanup_files:
   cleanup_test_files (test_filenames);
