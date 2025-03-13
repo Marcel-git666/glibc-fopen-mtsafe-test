@@ -25,93 +25,101 @@ struct thread_data
 
 static pthread_barrier_t barrier;
 
+static int
+run_file_creation_test(struct thread_data *data, const char *filename, FILE **file_ptr)
+{
+  *file_ptr = fopen(filename, "w");
+  if (*file_ptr == NULL)
+    {
+      printf("error: Thread %d: Failed to create test file %s\n",
+            data->thread_id, filename);
+      return 0;
+    }
+
+  /* Write Thread ID to file */
+  if (fprintf(*file_ptr, "%d", data->thread_id) < 0)
+    {
+      printf("error: Thread %d encountered error writing to file: %s\n",
+             data->thread_id, strerror(errno));
+      return 0;
+    }
+
+  fclose(*file_ptr);
+  *file_ptr = NULL;
+  return 1;
+}
+
+static int
+run_nonexistent_file_test(struct thread_data *data)
+{
+  char nonexistent_filename[FILENAME_MAXLEN];
+  snprintf(nonexistent_filename, FILENAME_MAXLEN,
+          "nonexistent_file_%d.xyz", data->thread_id);
+
+  FILE *nonexistent = fopen(nonexistent_filename, "r");
+  if (nonexistent != NULL)
+    {
+      printf("error: Nonexistent file exists!\n");
+      fclose(nonexistent);
+      unlink(nonexistent_filename);
+      return 0;
+    }
+
+  /* Store errno just after call */
+  int my_errno = errno;
+  /* Check whether errno is set to ENOENT */
+  if (my_errno != ENOENT)
+    {
+      printf("error: Thread %d: Unexpected errno value: %d\n",
+             data->thread_id, my_errno);
+      return 0;
+    }
+
+  return 1;
+}
+
+static int
+run_file_verification_test(struct thread_data *data, const char *filename, FILE **file_ptr)
+{
+  *file_ptr = fopen (filename, "r");
+  if (file_ptr == NULL)
+    {
+      printf ("error: Thread %d: Failed to reopen test file\n",
+             data->thread_id);
+      return 0;
+    }
+
+  int stored_id;
+  if (fscanf (*file_ptr, "%d", &stored_id) != 1 || stored_id != data->thread_id)
+    {
+      printf ("error: Thread %d: can't verify file content\n", data->thread_id);
+      return 0;
+    }
+  return 1;
+}
 /* Test basic MT-Safety fopen() */
 static void
 test_basic_mtsafety (struct thread_data *data)
 {
   char unique_filename[FILENAME_MAXLEN];
   FILE *file = NULL;
-  int result = 0;
 
   /* Each thread creates its unique file */
   snprintf (unique_filename, FILENAME_MAXLEN, "mtsafe_thread_%d.txt",
            data->thread_id);
 
-  /* 1st Test: File creation and writing */
-  file = fopen (unique_filename, "w");
-  if (file == NULL)
+  if (run_file_creation_test(data, unique_filename, &file)
+      && run_nonexistent_file_test(data)
+      && run_file_verification_test(data, unique_filename, &file))
     {
-      printf ("error: Thread %d: Failed to create test file %s\n",
-             data->thread_id, unique_filename);
-      goto cleanup;
+      data->test_passed++;
     }
 
-  /* Write Thread ID to file */
-  if (fprintf (file, "%d", data->thread_id) < 0)
-    {
-      printf ("error: Thread %d encountered error writing to file: %s\n",
-        data->thread_id, strerror (errno));
-      goto cleanup;
-    }
-
-  fclose (file);
-  file = NULL;
-
-  /* 2nd Test: Open nonexistent file (test errno) */
-  char nonexistent_filename[FILENAME_MAXLEN];
-  snprintf (nonexistent_filename, FILENAME_MAXLEN,
-           "nonexistent_file_%d.xyz", data->thread_id);
-
-  FILE *nonexistent = fopen (nonexistent_filename, "r");
-  if (nonexistent != NULL)
-    {
-      /* This shouldn't happen, but still we can clean */
-      printf("error: Nonexistent file exists!\n");
-      fclose (nonexistent);
-      unlink (nonexistent_filename);
-      goto cleanup;
-    }
-  else
-    {
-      /* Store errno just after call */
-      int my_errno = errno;
-      /* Check whether errno is set to ENOENT */
-      if (my_errno != ENOENT)
-        {
-          printf("error: Thread %d: Unexpected errno value: %d\n",
-                 data->thread_id, my_errno);
-          goto cleanup;
-        }
-    }
-
-  /* 3rd Test: Open its own file again */
-  file = fopen (unique_filename, "r");
-  if (file == NULL)
-    {
-      printf ("error: Thread %d: Failed to reopen test file\n",
-             data->thread_id);
-      goto cleanup;
-    }
-
-  int stored_id;
-  if (fscanf (file, "%d", &stored_id) != 1 || stored_id != data->thread_id)
-    {
-      printf ("error: Thread %d: can't verify file content\n", data->thread_id);
-      goto cleanup;
-    }
-
-  /* All tests passed */
-  result = 1;
-
-cleanup:
   if (file != NULL)
     fclose (file);
   unlink (unique_filename);
-
-  /* Update thread data with result */
-  if (result)
-    data->test_passed++;
 }
+
 /* Function run by threads */
 static void *
 thread_function (void *arg)
