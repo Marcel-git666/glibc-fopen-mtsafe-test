@@ -15,13 +15,12 @@
 #define NUM_FILES 4
 #define NUM_THREADS 64
 #define FILENAME_MAXLEN 100
-
+#define NUM_ITERATIONS 100
 /* Struct for data and threads */
 struct thread_data
 {
   int thread_id;
-  int success_count;
-  int error_count;
+  int test_passed;
 };
 
 static pthread_barrier_t barrier;
@@ -31,82 +30,88 @@ static void
 test_basic_mtsafety (struct thread_data *data)
 {
   char unique_filename[FILENAME_MAXLEN];
-  FILE *file;
+  FILE *file = NULL;
+  int result = 0;
 
   /* Each thread creates its unique file */
   snprintf (unique_filename, FILENAME_MAXLEN, "mtsafe_thread_%d.txt",
            data->thread_id);
 
-  printf ("Thread %d testing basic MT-Safety with file %s\n",
-         data->thread_id, unique_filename);
-
-  /* 1st Test: File creation */
+  /* 1st Test: File creation and writing */
   file = fopen (unique_filename, "w");
-  if (file != NULL)
+  if (file == NULL)
     {
-      /* Write Thread ID to file */
-      if (fprintf (file, "%d", data->thread_id) < 0)
-        {
-          printf ("Thread %d: Error writing to file: %s\n",
-            data->thread_id, strerror (errno));
-          data->error_count++;
-        }
-      else
-        {
-      data->success_count++;
-        }
-      fclose (file);
-      data->success_count++;
+      printf ("error: Thread %d: Failed to create test file %s\n",
+             data->thread_id, unique_filename);
+      goto cleanup;
+    }
 
-      /* 2nd Test: Open nonexistent file (test errno) */
-      char nonexistent_filename[FILENAME_MAXLEN];
-      snprintf (nonexistent_filename, FILENAME_MAXLEN,
-               "nonexistent_file_%d.xyz", data->thread_id);
+  /* Write Thread ID to file */
+  if (fprintf (file, "%d", data->thread_id) < 0)
+    {
+      printf ("error: Thread %d encountered error writing to file: %s\n",
+        data->thread_id, strerror (errno));
+      goto cleanup;
+    }
 
-      FILE *nonexistent = fopen (nonexistent_filename, "r");
-      if (nonexistent == NULL)
-        {
-          /* Store errno just after call */
-          int my_errno = errno;
-          /* Check whether errno is set to ENOENT */
-          if (my_errno == ENOENT)
-            {
-              printf ("Thread %d: errno correctly set to ENOENT\n", data->thread_id);
-              data->success_count++;
-            }
-        }
-      else
-        {
-          /* This shouldn't happen, but still we can clean */
-          printf("Unknown error!!!!");
-          fclose (nonexistent);
-          unlink (nonexistent_filename);
-        }
+  fclose (file);
+  file = NULL;
 
-      /* 3rd Test: Open its own file again */
-      file = fopen (unique_filename, "r");
-      if (file != NULL)
-        {
-          int stored_id;
-          if (fscanf (file, "%d", &stored_id) == 1 && stored_id == data->thread_id)
-            {
-              printf ("Thread %d: Successfully verified file content\n", data->thread_id);
-              data->success_count++;
-            }
-          fclose (file);
-        }
+  /* 2nd Test: Open nonexistent file (test errno) */
+  char nonexistent_filename[FILENAME_MAXLEN];
+  snprintf (nonexistent_filename, FILENAME_MAXLEN,
+           "nonexistent_file_%d.xyz", data->thread_id);
 
-      /* Delete test file */
-      unlink (unique_filename);
+  FILE *nonexistent = fopen (nonexistent_filename, "r");
+  if (nonexistent != NULL)
+    {
+      /* This shouldn't happen, but still we can clean */
+      printf("error: Nonexistent file exists!\n");
+      fclose (nonexistent);
+      unlink (nonexistent_filename);
+      goto cleanup;
     }
   else
     {
-      printf ("Error: Thread %d: Failed to create test file %s\n",
-             data->thread_id, unique_filename);
-      data->error_count++;
+      /* Store errno just after call */
+      int my_errno = errno;
+      /* Check whether errno is set to ENOENT */
+      if (my_errno != ENOENT)
+        {
+          printf("error: Thread %d: Unexpected errno value: %d\n",
+                 data->thread_id, my_errno);
+          goto cleanup;
+        }
     }
-}
 
+  /* 3rd Test: Open its own file again */
+  file = fopen (unique_filename, "r");
+  if (file == NULL)
+    {
+      printf ("error: Thread %d: Failed to reopen test file\n",
+             data->thread_id);
+      goto cleanup;
+    }
+
+  int stored_id;
+  if (fscanf (file, "%d", &stored_id) != 1 || stored_id != data->thread_id)
+    {
+      printf ("error: Thread %d: can't verify file content\n", data->thread_id);
+      goto cleanup;
+    }
+
+  /* All tests passed */
+  result = 1;
+
+cleanup:
+  if (file != NULL)
+    fclose (file);
+  unlink (unique_filename);
+
+  /* Update thread data with result */
+  if (result)
+    data->test_passed++;
+}
 /* Function run by threads */
 static void *
 thread_function (void *arg)
@@ -115,26 +120,19 @@ thread_function (void *arg)
   int j;
 
   pthread_barrier_wait (&barrier);
-  printf ("Thread %d starting ...\n", data->thread_id);
 
   /* Perform test multiple times to increase stress */
-  for (j = 0; j < 10; j++)
+  for (j = 0; j < NUM_ITERATIONS; j++)
     {
-      /* Add small random delay between iterations */
-      usleep (rand() % 1000);
-
-      printf ("Thread %d iteration %d\n", data->thread_id, j);
       test_basic_mtsafety(data);
     }
 
-  printf ("Thread %d finished.\n", data->thread_id);
   return NULL;
 }
 
 /* Initialize thread data and create threads */
 static int
-create_and_run_threads (pthread_t *threads, struct thread_data *thread_data,
-                       char filenames[][FILENAME_MAXLEN])
+create_and_run_threads (pthread_t *threads, struct thread_data *thread_data)
 {
   int i;
   int ret;
@@ -143,13 +141,12 @@ create_and_run_threads (pthread_t *threads, struct thread_data *thread_data,
   for (i = 0; i < NUM_THREADS; i++)
     {
       thread_data[i].thread_id = i;
-      thread_data[i].success_count = 0;
-      thread_data[i].error_count = 0;
+      thread_data[i].test_passed = 0;
 
       ret = pthread_create (&threads[i], NULL, thread_function, &thread_data[i]);
       if (ret != 0)
         {
-          printf ("Error creating thread %d: %s\n", i, strerror (ret));
+          printf ("error: Can't create a thread %d: %s\n", i, strerror (ret));
           return 0;
         }
     }
@@ -169,7 +166,7 @@ join_threads (pthread_t *threads)
       ret = pthread_join (threads[i], NULL);
       if (ret != 0)
         {
-          printf ("Error joining thread %d: %s\n", i, strerror (ret));
+          printf ("error: Can't join a thread %d: %s\n", i, strerror (ret));
           return 0;
         }
     }
@@ -182,19 +179,19 @@ static int
 report_results (const struct thread_data *thread_data)
 {
   int i;
-  int total_success = 0;
-  int total_errors = 0;
+  int total_passes = 0;
+  int expected_passes = NUM_THREADS * NUM_ITERATIONS;
 
   for (i = 0; i < NUM_THREADS; i++)
     {
-      total_success += thread_data[i].success_count;
-      total_errors += thread_data[i].error_count;
+      total_passes += thread_data[i].test_passed;
     }
 
-  printf ("Total operations: %d, Errors: %d\n",
-          total_success, total_errors);
+  printf ("info: Tests passed: %d of %d expected\n",
+          total_passes, expected_passes);
 
-  return (total_errors ? 0 : 1);
+  /* Return 1 (success) only if all tests passed */
+  return (total_passes == expected_passes) ? 1 : 0;
 }
 
 static int
@@ -202,15 +199,15 @@ do_test (void)
 {
   pthread_t threads[NUM_THREADS];
   struct thread_data thread_data[NUM_THREADS];
-  char test_filenames[NUM_FILES][FILENAME_MAXLEN];
   int success = 1;
 
   /* Initialize the barrier */
   pthread_barrier_init (&barrier, NULL, NUM_THREADS);
-  printf ("Test starting with %d threads\n", NUM_THREADS);
+  printf ("info: fopen() MT test starting with %d threads and %d cycles.\n",
+    NUM_THREADS, NUM_ITERATIONS);
 
   /* Create and run threads */
-  if (!create_and_run_threads (threads, thread_data, test_filenames))
+  if (!create_and_run_threads (threads, thread_data))
     {
       success = 0;
       goto cleanup_barrier;
@@ -223,7 +220,7 @@ do_test (void)
       goto cleanup_barrier;
     }
 
-  printf ("All threads completed\n");
+  printf ("info: All threads completed\n");
 
   /* Check and report results */
   success = report_results (thread_data);
@@ -240,9 +237,9 @@ main (void)
 {
   int result = do_test ();
   if (result == 0)
-    printf ("TEST PASSED\n");
+    printf ("info: TEST PASSED\n");
   else
-    printf ("TEST FAILED (code %d)\n", result);
+    printf ("error: TEST FAILED (code %d)\n", result);
   return result;
 }
 #else
