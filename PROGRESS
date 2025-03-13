@@ -5,10 +5,18 @@ March 11, 2025:
 
 March 12, 2025
 - Implemented file operations in each thread
-- Refactor code to use more functions
+- Refactored code to use more functions
 - Improved error handling
-- Adding basic MT-safety every thread opens unique file with unique id
-- Adding errno checking
-- I would use xpthread_create if developing for glibc directly
-- I found https://github.com/bminor/glibc/blob/master/iconv/tst-iconv-mt.c that looks much easier than my test, so I might simplify it too.
-- Half code removed, simplification might be the key
+- Added basic MT-safety test where each thread opens a unique file with a unique ID
+- Added errno checking
+- Would use xpthread_create if developing for glibc directly
+- Found https://github.com/bminor/glibc/blob/master/iconv/tst-iconv-mt.c that looks much simpler than my test, which led me to simplify my approach
+- Removed half the code; simplification might be the key
+
+March 13, 2025
+- Refactored code to be more verbose with better error reporting
+- Studied iconv MT test for inspiration
+- Validated that my approach is sound for testing MT-Safety
+- Added proper error prefixes (error:, info:) following glibc conventions
+- Final code implements a clean, focused test of fopen() MT-Safety
+

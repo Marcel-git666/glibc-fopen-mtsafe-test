@@ -1,21 +1,23 @@
 PURPOSE:
-This test aims to verify that the fopen() function in glibc is MT-Safe 
-(thread-safe). MT-Safe functions can be safely called from multiple 
-threads concurrently without causing race conditions or other 
+This test aims to verify that the fopen() function in glibc is MT-Safe
+(thread-safe). MT-Safe functions can be safely called from multiple
+threads concurrently without causing race conditions or other
 thread-related issues.
 
 Approach:
-1. Create multiple threads (10) that concurrently call fopen() to open,
+1. Create multiple threads (64) that concurrently call fopen() to open,
    read/write, and close files.
-2. Some threads operate on the same files while others operate on 
-   different files to test various concurrency scenarios.
-3. Each thread performs multiple iterations (100) to increase the 
+2. Each thread creates its own unique file for testing basic MT-Safety.
+3. Each thread performs multiple iterations (100) to increase the
    likelihood of exposing any potential race conditions.
-4. The test logs detailed information about each operation, including
-   timestamps, to help analyze the test's behavior.
-5. After the test completes, the integrity of the files is verified
-   to ensure no data corruption occurred.
+4. The test performs three key checks:
+   - File creation and writing
+   - Proper errno setting when files don't exist
+   - File content verification
+5. The test validates that each thread's operations are isolated and
+   don't interfere with other threads.
 
 Expected results:
 If fopen() is truly MT-Safe, all threads should be able to perform their
 operations without interference, data corruption, or unexpected errors.
+The test passes only if all operations in all threads complete successfully.
