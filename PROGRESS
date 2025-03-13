@@ -18,5 +18,11 @@ March 13, 2025
 - Studied iconv MT test for inspiration
 - Validated that my approach is sound for testing MT-Safety
 - Added proper error prefixes (error:, info:) following glibc conventions
-- Final code implements a clean, focused test of fopen() MT-Safety
-
+- Further refactored code to better follow Single Responsibility Principle (SRP)
+- Split test_basic_mtsafety into three specialized functions:
+  * run_file_creation_test
+  * run_nonexistent_file_test
+  * run_file_verification_test
+- Simplified error handling by removing goto statements
+- Removed redundant result variable for cleaner flow control
+- Final review shows code now better adheres to SOLID principles
