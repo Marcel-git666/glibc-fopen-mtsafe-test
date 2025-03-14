@@ -26,3 +26,11 @@ March 13, 2025
 - Simplified error handling by removing goto statements
 - Removed redundant result variable for cleaner flow control
 - Final review shows code now better adheres to SOLID principles
+
+March 14, 2025
+- Removed unnecessary comments to improve code readability
+- Eliminated redundant file handling code
+- Ensured each function properly cleans up its own resources
+- Removed check for nonexistent file deletion as it's not required
+- Reviewed code against glibc style guidelines for final submission
+- Tested with various thread counts to ensure robustness
