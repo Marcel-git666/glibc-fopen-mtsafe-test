@@ -12,9 +12,9 @@
 #include <support/xthread.h>
 #endif
 
-#define NUM_THREADS 16
+#define NUM_THREADS 64
 #define FILENAME_MAXLEN 100
-#define NUM_ITERATIONS 10
+#define NUM_ITERATIONS 100
 
 struct thread_data
 {

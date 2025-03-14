@@ -34,3 +34,4 @@ March 14, 2025
 - Removed check for nonexistent file deletion as it's not required
 - Reviewed code against glibc style guidelines for final submission
 - Tested with various thread counts to ensure robustness
+- Replaced fscanf verification with direct string comparison for more robust tests
