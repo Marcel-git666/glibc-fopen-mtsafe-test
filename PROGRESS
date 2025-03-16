@@ -35,3 +35,33 @@ March 14, 2025
 - Reviewed code against glibc style guidelines for final submission
 - Tested with various thread counts to ensure robustness
 - Replaced fscanf verification with direct string comparison for more robust tests
+
+March 15-16, 2025 (Weekend)
+
+- Reviewed multi-threaded test implementation
+- Validated test configuration:
+- Confirmed 64 threads
+- Verified 100 iterations per thread
+- Prepared documentation
+- Investigated ThreadSanitizer integration
+- Added troubleshooting guidance for memory mapping issues
+
+Key Challenges Overcome
+
+- Ensuring thread isolation
+- Implementing robust error checking
+- Managing file operations across multiple concurrent threads
+- Developing a test that can reliably detect MT-safety issues
+
+Lessons Learned
+
+- Simplification is crucial in multi-threaded testing
+- Careful error handling is key to robust thread-safe code
+- Using barriers helps synchronize thread execution
+- ThreadSanitizer is invaluable for detecting subtle threading issues
+
+Future Improvements
+
+- Consider additional edge cases
+- Potentially increase thread and iteration counts
+- Explore more complex file operation scenarios

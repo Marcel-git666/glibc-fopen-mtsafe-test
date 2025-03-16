@@ -1,8 +1,6 @@
 CC = gcc
-CFLAGS = -Wall -g -pthread -DSTANDALONE_TEST
-# -fsanitize=thread
-LDFLAGS = -pthread
-# -fsanitize=thread
+CFLAGS = -Wall -g -pthread -DSTANDALONE_TEST -fsanitize=thread
+LDFLAGS = -pthread -fsanitize=thread
 
 tst-fopen-mtsafe: libio/tst-fopen-mtsafe.c
 	$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)

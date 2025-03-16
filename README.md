@@ -27,6 +27,13 @@ Each thread runs multiple iterations to maximize the chances of exposing potenti
 ## Usage
 This test can be built either as a standalone program or integrated into the glibc test suite.
 
+## Troubleshooting with ThreadSanitizer
+When running with ThreadSanitizer, use:
+```bash
+setarch $(uname -m) -R ./tst-fopen-mtsafe
+```
+This command helps address potential memory mapping issues with sanitizers.
+
 ### Standalone Build
 ```bash
 make

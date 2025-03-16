@@ -21,3 +21,10 @@ Expected results:
 If fopen() is truly MT-Safe, all threads should be able to perform their
 operations without interference, data corruption, or unexpected errors.
 The test passes only if all operations in all threads complete successfully.
+
+Troubleshooting with ThreadSanitizer
+When running with ThreadSanitizer, use:
+```bash
+setarch $(uname -m) -R ./tst-fopen-mtsafe
+```
+This command helps address potential memory mapping issues with sanitizers.
