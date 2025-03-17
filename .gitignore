@@ -1,3 +1,4 @@
+.vscode/
 # Main executable
 tst-fopen-mtsafe
 
